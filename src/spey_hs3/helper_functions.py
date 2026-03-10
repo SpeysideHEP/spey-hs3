@@ -115,15 +115,19 @@ class WorkspaceInterpreter:
         }
 
     @property
+    def likelihoods(self) -> Dict[str, List[str]]:
+        """Likelihood name per analysis: ``{analysis_name: [likelihood, ...]}}``."""
+        return {
+            a["name"]: a["likelihood"]
+            for a in self._analyses_list
+            if a.get("likelihood", False)
+        }
+
+    @property
     def bin_map(self) -> Dict[str, int]:
         """Number of bins per ``histfactory_dist`` distribution."""
         result: Dict[str, int] = {}
         for dist_name, dist in self._dist_map.items():
-            # Prefer the axes field on the distribution itself
-            axes = dist.get("axes", [])
-            if axes:
-                result[dist_name] = axes[0].get("nbins", len(axes))
-                continue
             # Fall back: infer from first sample contents
             samples = dist.get("samples", [])
             if samples:
