@@ -7,17 +7,16 @@ import logging
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
-import spey
+import pyhs3
+from pyhs3.domains import Axis, ProductDomain
 from spey.base import ModelConfig
 from spey.base.backend_base import BackendBase
 from spey.utils import ExpectationType
 
-import pyhs3
-from pyhs3.domains import ProductDomain, Axis
-
 from ._version import __version__
+from .helper_functions import WorkspaceInterpreter
 
-__all__ = ["HS3Interface"]
+__all__ = ["HS3Interface", "WorkspaceInterpreter"]
 
 log = logging.getLogger("Spey")
 
