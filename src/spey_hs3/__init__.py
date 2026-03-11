@@ -2,133 +2,26 @@
 
 from __future__ import annotations
 
-import copy
 import logging
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
-import spey
+import pyhs3
+from pyhs3.domains import ProductDomain
 from spey.base import ModelConfig
 from spey.base.backend_base import BackendBase
 from spey.utils import ExpectationType
 
-import pyhs3
-from pyhs3.domains import ProductDomain, Axis
-
 from ._version import __version__
+from .helper_functions import WorkspaceInterpreter
 
-__all__ = ["HS3Interface"]
+__all__ = ["HS3Interface", "WorkspaceInterpreter"]
 
 log = logging.getLogger("Spey")
 
 
 def __dir__():
     return __all__
-
-
-# ---------------------------------------------------------------------------
-# Signal injection helpers (adapted from ediths3.py logic)
-# ---------------------------------------------------------------------------
-
-
-def _inject_signal(
-    hs3_dict: Dict,
-    signal_yields: Dict[str, Dict[str, Union[List[float], Dict]]],
-    poi_name: str,
-) -> Dict:
-    """
-    Return a deep copy of *hs3_dict* with signal samples injected into each
-    ``histfactory_dist`` distribution listed in *signal_yields*.
-
-    Parameters
-    ----------
-    hs3_dict:
-        HS3 JSON workspace as a Python dictionary.
-    signal_yields:
-        Mapping ``{dist_name: {sample_name: counts_or_spec}}``.
-        ``counts_or_spec`` is either a list of floats (per-bin yields) or a
-        dict with keys ``"contents"`` (required) and ``"errors"`` (optional).
-    poi_name:
-        Name of the parameter of interest.  A ``normfactor`` modifier of this
-        name is attached to every injected sample.
-
-    Returns
-    -------
-    dict
-        Patched HS3 workspace dictionary.
-    """
-    data = copy.deepcopy(hs3_dict)
-    dists = data.get("distributions", [])
-
-    for dist_name, samples_spec in signal_yields.items():
-        # Find the matching histfactory_dist
-        match = [
-            d
-            for d in dists
-            if d.get("name") == dist_name and d.get("type") == "histfactory_dist"
-        ]
-        if not match:
-            raise ValueError(
-                f"No histfactory_dist named '{dist_name}' found in the workspace."
-            )
-        dist = match[0]
-        existing_samples = dist.setdefault("samples", [])
-
-        for sample_name, spec in samples_spec.items():
-            if any(s.get("name") == sample_name for s in existing_samples):
-                raise ValueError(
-                    f"Sample '{sample_name}' already exists in distribution '{dist_name}'."
-                )
-
-            # Parse spec
-            if isinstance(spec, dict):
-                contents = list(spec["contents"])
-                errors = list(spec.get("errors", [0.0] * len(contents)))
-            else:
-                contents = list(spec)
-                errors = [0.0] * len(contents)
-
-            if len(contents) != len(errors):
-                raise ValueError(
-                    f"Signal yields for {dist_name}/{sample_name}: "
-                    f"'contents' ({len(contents)}) and 'errors' ({len(errors)}) must have the same length."
-                )
-
-            new_sample = {
-                "name": sample_name,
-                "data": {
-                    "contents": contents,
-                    "errors": errors,
-                },
-                "modifiers": [
-                    {
-                        "name": poi_name,
-                        "type": "normfactor",
-                        "parameter": poi_name,
-                    }
-                ],
-            }
-            existing_samples.append(new_sample)
-
-    # Ensure the POI is registered in every analysis's parameters_of_interest
-    _augment_poi(data, poi_name)
-    return data
-
-
-def _augment_poi(data: Dict, poi_name: str) -> None:
-    """Add *poi_name* to the parameters_of_interest of all analyses."""
-    if isinstance(data.get("analysis"), dict):
-        pois = data["analysis"].setdefault("parameters_of_interest", [])
-        if poi_name not in pois:
-            pois.append(poi_name)
-
-    if isinstance(data.get("analyses"), list):
-        for a in data["analyses"]:
-            if not isinstance(a, dict):
-                continue
-            pois = a.setdefault("parameters_of_interest", [])
-            if poi_name not in pois:
-                pois.append(poi_name)
 
 
 def _merge_domains(workspace: pyhs3.Workspace, domain_names: List[str]) -> ProductDomain:
@@ -149,7 +42,7 @@ def _merge_domains(workspace: pyhs3.Workspace, domain_names: List[str]) -> Produ
     ProductDomain
         A new synthetic domain containing all axes from every referenced domain.
     """
-    merged_axes: Dict[str, Dict] = {}
+    merged_axes: Dict[str, object] = {}
     for dname in domain_names:
         domain = workspace.domains[dname]
         if not isinstance(domain, ProductDomain):
@@ -157,12 +50,12 @@ def _merge_domains(workspace: pyhs3.Workspace, domain_names: List[str]) -> Produ
             continue
         for axis in domain.axes:
             # Later domains override earlier ones for the same axis name
-            merged_axes[axis.name] = {"name": axis.name, "min": axis.min, "max": axis.max}
+            merged_axes[axis.name] = axis  # reuse existing axis objects directly
 
     return ProductDomain(
         name="_spey_merged_domain",
         type="product_domain",
-        axes=[Axis(**ax) for ax in merged_axes.values()],
+        axes=list(merged_axes.values()),
     )
 
 
@@ -254,32 +147,46 @@ class HS3Interface(BackendBase):
         signal_yields: Optional[Dict[str, Dict[str, Union[List[float], Dict]]]] = None,
         analysis_name: Optional[str] = None,
         poi_name: Optional[str] = None,
-        progress: bool = False,
+        progress: bool = True,
         mode: str = "FAST_COMPILE",
     ):
         # ------------------------------------------------------------------ #
         # 1. Determine POI name (before injection so we know what to inject)  #
         # ------------------------------------------------------------------ #
-        ws_tmp = pyhs3.Workspace(**hs3_dict)
-        analysis_tmp = _select_analysis(ws_tmp, analysis_name)
+        interpreter = WorkspaceInterpreter(hs3_dict)
+
+        analyses = interpreter.analyses
+        if analysis_name is None:
+            analysis_name = analyses[0]
+            log.debug("Setting analysis name as '%s'", analysis_name)
+        else:
+            assert analysis_name in analyses, (
+                f"Analysis {analysis_name} does not exist. Available analyses are"
+                + ", ".join(analyses)
+            )
+
         if poi_name is None:
-            pois = analysis_tmp.parameters_of_interest or []
-            if not pois:
+            poi_names = interpreter.poi_names.get(analysis_name, [])
+            if len(poi_names) == 0:
                 raise ValueError(
                     "No parameters_of_interest found in the selected analysis. "
-                    "Please specify poi_name explicitly."
+                    "Please specify `poi_name` explicitly."
                 )
-            poi_name = pois[0]
+            poi_name = poi_names[0]
+            log.warning(
+                "Parameter of interest is not defined, setting it as '%s'.", poi_name
+            )
         self._poi_name: str = poi_name
-        self._signal_yields = signal_yields or {}
 
         # ------------------------------------------------------------------ #
         # 2. Inject signal into the workspace dict                            #
         # ------------------------------------------------------------------ #
+        self._signal_yields = signal_yields or {}
         if signal_yields:
-            working_dict = _inject_signal(hs3_dict, signal_yields, poi_name)
+            interpreter.inject_signals(signal_yields)
+            working_dict = interpreter.patch
         else:
-            working_dict = copy.deepcopy(hs3_dict)
+            working_dict = interpreter._workspace
 
         # ------------------------------------------------------------------ #
         # 3. Build pyhs3 Workspace                                            #
@@ -289,14 +196,15 @@ class HS3Interface(BackendBase):
         # ------------------------------------------------------------------ #
         # 4. Resolve analysis / likelihood                                    #
         # ------------------------------------------------------------------ #
-        self._analysis = _select_analysis(self._workspace, analysis_name)
-        lh_name = self._analysis.likelihood
-        self._likelihood = self._workspace.likelihoods[lh_name]
+        self._analysis = self._workspace.analyses[analysis_name]
+        self._likelihood = self._workspace.likelihoods[
+            interpreter.likelihoods[analysis_name]
+        ]
 
         # ------------------------------------------------------------------ #
         # 5. Build merged domain and select parameter set                     #
         # ------------------------------------------------------------------ #
-        domain_names = self._analysis.domains or []
+        domain_names = [d.name for d in self._analysis.domains or []]
         if domain_names:
             self._domain = _merge_domains(self._workspace, domain_names)
         else:
@@ -350,9 +258,12 @@ class HS3Interface(BackendBase):
                     const_params[p.name] = p.value
 
         # Collect domain bounds
+        # DomainCoordinateAxis uses v_min/v_max as Python field names (alias='min'/'max')
         param_bounds: Dict[str, Tuple[Optional[float], Optional[float]]] = {}
         for axis in self._domain.axes:
-            param_bounds[axis.name] = (axis.min, axis.max)
+            lo = getattr(axis, "v_min", None) if hasattr(axis, "v_min") else getattr(axis, "min", None)
+            hi = getattr(axis, "v_max", None) if hasattr(axis, "v_max") else getattr(axis, "max", None)
+            param_bounds[axis.name] = (lo, hi)
 
         # Walk every distribution in the likelihood and collect all parameter names
         # Separate observed-data params from free/const params
@@ -360,19 +271,17 @@ class HS3Interface(BackendBase):
         dist_par_map: Dict[str, List[str]] = {}
         free_params_set: List[str] = []  # ordered, deduped
 
-        for idx, dist_name in enumerate(lh.distributions):
+        for dist_obj, data_obj in zip(lh.distributions, lh.data):
+            dist_name = dist_obj.name
             pars = self._model.pars(dist_name)
             dist_par_map[dist_name] = pars
 
-            # Get observed data for this distribution from the workspace
-            data_ref = lh.data[idx] if idx < len(lh.data) else None
-            if data_ref is not None and isinstance(data_ref, str):
-                try:
-                    data_obj = self._workspace.data[data_ref]
-                    obs = np.array(data_obj.contents, dtype=np.float64)
-                    observed_data[dist_name] = obs
-                except (KeyError, AttributeError):
-                    pass
+            # Get observed data directly from the paired BinnedData object
+            try:
+                obs = np.array(data_obj.contents, dtype=np.float64)
+                observed_data[dist_name] = obs
+            except AttributeError:
+                pass
 
             # Collect free parameters (not const, not observed)
             for par_name in pars:
@@ -501,7 +410,7 @@ class HS3Interface(BackendBase):
         if data is not None:
             obs_data = _split_data_by_dist(
                 np.asarray(data, dtype=np.float64),
-                lh.distributions,
+                [d.name for d in lh.distributions],
                 dist_par_map,
                 self._observed_data,
             )
@@ -515,17 +424,18 @@ class HS3Interface(BackendBase):
             named.update(const_params)
 
             total = 0.0
-            for dist_name in lh.distributions:
+            for dist_obj in lh.distributions:
+                dist_name = dist_obj.name
                 ordered_pars = dist_par_map[dist_name]
                 call_kwargs = {}
                 for par_name in ordered_pars:
                     if par_name.endswith("_observed"):
-                        call_kwargs[par_name] = obs_data.get(
-                            dist_name, np.zeros(1, dtype=np.float64)
+                        call_kwargs[par_name] = np.array(
+                            obs_data.get(dist_name, np.zeros(1, dtype=np.float64))
                         )
                     else:
-                        call_kwargs[par_name] = named.get(par_name, 1.0)
-                result = model.logpdf_unsafe(dist_name, **call_kwargs)
+                        call_kwargs[par_name] = np.array(named.get(par_name, 1.0))
+                result = model.logpdf(dist_name, **call_kwargs)
                 total += float(np.sum(result))
             return total
 
@@ -563,7 +473,8 @@ class HS3Interface(BackendBase):
 
         all_expected: List[float] = []
 
-        for dist_name in lh.distributions:
+        for dist_obj in lh.distributions:
+            dist_name = dist_obj.name
             ordered_pars = dist_par_map[dist_name]
             obs_key = f"{dist_name}_observed"
 
@@ -621,7 +532,8 @@ class HS3Interface(BackendBase):
         # Re-package into per-distribution arrays
         asimov: Dict[str, np.ndarray] = {}
         idx = 0
-        for dist_name in self._likelihood.distributions:
+        for dist_obj in self._likelihood.distributions:
+            dist_name = dist_obj.name
             n_bins_known = self._observed_data.get(dist_name)
             if n_bins_known is not None:
                 n = len(n_bins_known)
@@ -635,22 +547,6 @@ class HS3Interface(BackendBase):
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
-
-
-def _select_analysis(workspace: pyhs3.Workspace, analysis_name: Optional[str]):
-    """Return the chosen analysis from the workspace."""
-    if workspace.analyses is None or len(workspace.analyses) == 0:
-        raise ValueError("The workspace contains no analyses.")
-
-    if analysis_name is None:
-        return workspace.analyses[0]
-
-    if analysis_name not in workspace.analyses:
-        available = [a.name for a in workspace.analyses]
-        raise ValueError(
-            f"Analysis '{analysis_name}' not found. " f"Available analyses: {available}"
-        )
-    return workspace.analyses[analysis_name]
 
 
 def _split_data_by_dist(

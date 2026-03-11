@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spey-hs3"
+dynamic = ["version"]
+description = "HS3 plugin for spey interface"
+readme = {file = "README.md", content-type = "text/markdown"}
+license = {text = "MIT"}
+authors = [
+    {name = "Jack Y. Araz", email = "j.araz@ucl.ac.uk"},
+]
+requires-python = ">3.10, <3.14"
+dependencies = [
+    "spey>=0.2.1",
+    "pyhs3",
+]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+[project.urls]
+Homepage = "https://github.com/SpeysideHEP/spey-hs3"
+Repository = "https://github.com/SpeysideHEP/spey-hs3"
+Documentation = "https://spey-hs3.readthedocs.io"
+"Bug Tracker" = "https://github.com/SpeysideHEP/spey-hs3/issues"
+Download = "https://github.com/SpeysideHEP/spey-hs3/releases"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.1.2",
+    "pytest-cov>=3.0.0",
+    "twine>=3.7.1",
+    "wheel>=0.37.1",
+]
+
+[project.entry-points."spey.backend.plugins"]
+"hs3" = "spey_hs3:HS3Interface"
+
+[tool.setuptools.dynamic]
+version = {attr = "spey_hs3._version.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
