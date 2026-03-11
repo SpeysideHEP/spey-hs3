@@ -115,8 +115,8 @@ class WorkspaceInterpreter:
         }
 
     @property
-    def likelihoods(self) -> Dict[str, List[str]]:
-        """Likelihood name per analysis: ``{analysis_name: [likelihood, ...]}}``."""
+    def likelihoods(self) -> Dict[str, str]:
+        """Likelihood name per analysis: ``{analysis_name: likelihood_name}``."""
         return {
             a["name"]: a["likelihood"]
             for a in self._analyses_list

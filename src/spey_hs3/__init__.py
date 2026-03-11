@@ -258,9 +258,12 @@ class HS3Interface(BackendBase):
                     const_params[p.name] = p.value
 
         # Collect domain bounds
+        # DomainCoordinateAxis uses v_min/v_max as Python field names (alias='min'/'max')
         param_bounds: Dict[str, Tuple[Optional[float], Optional[float]]] = {}
         for axis in self._domain.axes:
-            param_bounds[axis.name] = (axis.min, axis.max)
+            lo = getattr(axis, "v_min", None) if hasattr(axis, "v_min") else getattr(axis, "min", None)
+            hi = getattr(axis, "v_max", None) if hasattr(axis, "v_max") else getattr(axis, "max", None)
+            param_bounds[axis.name] = (lo, hi)
 
         # Walk every distribution in the likelihood and collect all parameter names
         # Separate observed-data params from free/const params
