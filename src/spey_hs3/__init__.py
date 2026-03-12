@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import logging
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
@@ -184,13 +185,16 @@ class HS3Interface(BackendBase):
         self._signal_yields = signal_yields or {}
         if signal_yields:
             interpreter.inject_signals(signal_yields)
-            working_dict = interpreter.patch
+            working_dict = interpreter.patch  # already a deep copy
         else:
-            working_dict = interpreter._workspace
+            working_dict = copy.deepcopy(interpreter._workspace)
 
         # ------------------------------------------------------------------ #
         # 3. Build pyhs3 Workspace                                            #
         # ------------------------------------------------------------------ #
+        # pyhs3 >=0.4.1 requires SampleData.errors in every sample; fill in
+        # zeros for any sample that omits the field (modifies working_dict in-place).
+        _ensure_sample_errors(working_dict)
         self._workspace: pyhs3.Workspace = pyhs3.Workspace(**working_dict)
 
         # ------------------------------------------------------------------ #
@@ -204,7 +208,7 @@ class HS3Interface(BackendBase):
         # ------------------------------------------------------------------ #
         # 5. Build merged domain and select parameter set                     #
         # ------------------------------------------------------------------ #
-        domain_names = [d.name for d in self._analysis.domains or []]
+        domain_names = self._analysis.domains
         if domain_names:
             self._domain = _merge_domains(self._workspace, domain_names)
         else:
@@ -257,31 +261,31 @@ class HS3Interface(BackendBase):
                 if p.const:
                     const_params[p.name] = p.value
 
-        # Collect domain bounds
-        # DomainCoordinateAxis uses v_min/v_max as Python field names (alias='min'/'max')
+        # Collect domain bounds (pyhs3 >=0.4 uses axis.min / axis.max)
         param_bounds: Dict[str, Tuple[Optional[float], Optional[float]]] = {}
         for axis in self._domain.axes:
-            lo = getattr(axis, "v_min", None) if hasattr(axis, "v_min") else getattr(axis, "min", None)
-            hi = getattr(axis, "v_max", None) if hasattr(axis, "v_max") else getattr(axis, "max", None)
+            lo = getattr(axis, "min", None)
+            hi = getattr(axis, "max", None)
             param_bounds[axis.name] = (lo, hi)
 
-        # Walk every distribution in the likelihood and collect all parameter names
-        # Separate observed-data params from free/const params
+        # Walk every distribution in the likelihood and collect all parameter names.
+        # In pyhs3 >=0.4, lh.distributions and lh.data are lists of *names* (strings),
+        # not objects — look up the actual data object from the workspace store.
         observed_data: Dict[str, np.ndarray] = {}
         dist_par_map: Dict[str, List[str]] = {}
         free_params_set: List[str] = []  # ordered, deduped
 
-        for dist_obj, data_obj in zip(lh.distributions, lh.data):
-            dist_name = dist_obj.name
+        for dist_name, data_name in zip(lh.distributions, lh.data):
             pars = self._model.pars(dist_name)
             dist_par_map[dist_name] = pars
 
-            # Get observed data directly from the paired BinnedData object
-            try:
-                obs = np.array(data_obj.contents, dtype=np.float64)
-                observed_data[dist_name] = obs
-            except AttributeError:
-                pass
+            # Look up observed data via the workspace data store (data_name is a str)
+            if isinstance(data_name, str):
+                data_obj = self._workspace.data.get(data_name)
+                if data_obj is not None and hasattr(data_obj, "contents"):
+                    observed_data[dist_name] = np.array(
+                        data_obj.contents, dtype=np.float64
+                    )
 
             # Collect free parameters (not const, not observed)
             for par_name in pars:
@@ -410,7 +414,7 @@ class HS3Interface(BackendBase):
         if data is not None:
             obs_data = _split_data_by_dist(
                 np.asarray(data, dtype=np.float64),
-                [d.name for d in lh.distributions],
+                list(lh.distributions),  # list[str] in pyhs3 >=0.4
                 dist_par_map,
                 self._observed_data,
             )
@@ -425,7 +429,7 @@ class HS3Interface(BackendBase):
 
             total = 0.0
             for dist_obj in lh.distributions:
-                dist_name = dist_obj.name
+                dist_name = dist_obj  # .name future dev
                 ordered_pars = dist_par_map[dist_name]
                 call_kwargs = {}
                 for par_name in ordered_pars:
@@ -435,7 +439,7 @@ class HS3Interface(BackendBase):
                         )
                     else:
                         call_kwargs[par_name] = np.array(named.get(par_name, 1.0))
-                result = model.logpdf(dist_name, **call_kwargs)
+                result = model.logpdf_unsafe(dist_name, **call_kwargs)
                 total += float(np.sum(result))
             return total
 
@@ -474,7 +478,7 @@ class HS3Interface(BackendBase):
         all_expected: List[float] = []
 
         for dist_obj in lh.distributions:
-            dist_name = dist_obj.name
+            dist_name = dist_obj
             ordered_pars = dist_par_map[dist_name]
             obs_key = f"{dist_name}_observed"
 
@@ -533,7 +537,7 @@ class HS3Interface(BackendBase):
         asimov: Dict[str, np.ndarray] = {}
         idx = 0
         for dist_obj in self._likelihood.distributions:
-            dist_name = dist_obj.name
+            dist_name = dist_obj  # .name
             n_bins_known = self._observed_data.get(dist_name)
             if n_bins_known is not None:
                 n = len(n_bins_known)
@@ -547,6 +551,37 @@ class HS3Interface(BackendBase):
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
+
+
+def _ensure_sample_errors(ws_dict: Dict) -> Dict:
+    """
+    Ensure every ``histfactory_dist`` sample has an ``errors`` field.
+
+    pyhs3 >=0.4.1 requires ``SampleData.errors`` to be present and the same
+    length as ``contents``.  This helper fills in zeros for any sample that is
+    missing the field so that the workspace can be parsed without modification
+    by the caller.
+
+    The input dict is **modified in-place** and also returned for convenience.
+    """
+    for dist in ws_dict.get("distributions", []):
+        if dist.get("type") != "histfactory_dist":
+            continue
+        for sample in dist.get("samples", []):
+            data = sample.get("data", {})
+            if not isinstance(data, dict):
+                continue
+            contents = data.get("contents", [])
+            if "errors" not in data:
+                data["errors"] = [0.0] * len(contents)
+            elif len(data["errors"]) != len(contents):
+                # Truncate or extend to match contents length
+                n = len(contents)
+                errs = list(data["errors"])
+                if len(errs) < n:
+                    errs.extend([0.0] * (n - len(errs)))
+                data["errors"] = errs[:n]
+    return ws_dict
 
 
 def _split_data_by_dist(
