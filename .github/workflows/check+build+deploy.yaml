@@ -19,9 +19,9 @@ jobs:
                 os: [ubuntu-latest, macos-latest]
 
         steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v5
             - name: Set up Python ${{ matrix.python-version }}
-              uses: actions/setup-python@v3
+              uses: actions/setup-python@v5
               with:
                   python-version: ${{ matrix.python-version }}
             - name: Install dependencies
@@ -40,12 +40,12 @@ jobs:
         needs: check
         steps:
             - name: Checkout git repository
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
 
             - name: Build Spey-HS3 wheel
               run: |
                   python -m pip install --upgrade pip
-                  python -m pip install wheel
+                  python -m pip install wheel build
                   python -m build --wheel
 
             - name: Debug
