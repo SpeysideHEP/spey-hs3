@@ -62,10 +62,7 @@ MINIMAL_WS = {
 
 
 # Uncorrelated-background workspace from pyhs3 test suite
-UNCORRELATED_WS_PATH = (
-    "/Users/jackaraz/dev/MadAnalysis/pyhs3/tests/test_histfactory"
-    "/simplemodel_uncorrelated-background_hs3.json"
-)
+UNCORRELATED_WS_PATH = "tests/simplemodel_uncorrelated-background_hs3.json"
 
 
 @pytest.fixture
