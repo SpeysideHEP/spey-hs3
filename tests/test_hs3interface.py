@@ -46,7 +46,7 @@ def test_backend_registered():
 
 def test_bg_only_model_config(minimal_ws):
     model = _build_model(minimal_ws, analysis="analysis_SR")
-    cfg = model.config()
+    cfg = model.backend.config()
     assert cfg.poi_index == 0
     assert "mu" in cfg.parameter_names
     assert cfg.parameter_names[0] == "mu"
@@ -75,7 +75,7 @@ def test_bg_only_expected_data(minimal_ws):
 def test_signal_model_config(minimal_ws):
     signal = {"model_SR": {"Signal": [3.0, 5.0]}}
     model = _build_model(minimal_ws, signal=signal, analysis="analysis_SR")
-    cfg = model.config()
+    cfg = model.backend.config()
     assert cfg.parameter_names[0] == "mu"
 
 
@@ -172,7 +172,7 @@ def test_missing_errors_are_filled(minimal_ws):
     ws["distributions"][0]["samples"][0]["data"].pop("errors")
     # Should not raise
     model = _build_model(ws, analysis="analysis_SR")
-    cfg = model.config()
+    cfg = model.backend.config()
     assert cfg.parameter_names[0] == "mu"
 
 
@@ -183,7 +183,7 @@ def test_missing_errors_are_filled(minimal_ws):
 
 def test_uncorrelated_bg_config(uncorrelated_ws):
     model = _build_model(uncorrelated_ws, analysis="simPdf_obsData")
-    cfg = model.config()
+    cfg = model.backend.config()
     assert cfg.poi_index == 0
     assert cfg.parameter_names[0] == "mu"
     # Lumi is const=True → should not appear as free param
@@ -192,7 +192,7 @@ def test_uncorrelated_bg_config(uncorrelated_ws):
 
 def test_uncorrelated_bg_logpdf(uncorrelated_ws):
     model = _build_model(uncorrelated_ws, analysis="simPdf_obsData")
-    cfg = model.config()
+    cfg = model.backend.config()
     init = cfg.suggested_init
     lp = model.backend.get_logpdf_func()(init)
     assert np.isfinite(lp)
@@ -200,7 +200,7 @@ def test_uncorrelated_bg_logpdf(uncorrelated_ws):
 
 def test_uncorrelated_bg_expected_data(uncorrelated_ws):
     model = _build_model(uncorrelated_ws, analysis="simPdf_obsData")
-    cfg = model.config()
+    cfg = model.backend.config()
     exp = model.backend.expected_data(cfg.suggested_init)
     assert len(exp) == 2
     assert all(np.isfinite(v) and v > 0 for v in exp)
@@ -209,7 +209,7 @@ def test_uncorrelated_bg_expected_data(uncorrelated_ws):
 def test_uncorrelated_signal_injection(uncorrelated_ws):
     signal = {"model_singlechannel": {"NewSignal": [3.0, 5.0]}}
     model = _build_model(uncorrelated_ws, signal=signal, analysis="simPdf_obsData")
-    cfg = model.config()
+    cfg = model.backend.config()
     assert cfg.parameter_names[0] == "mu"
 
 
