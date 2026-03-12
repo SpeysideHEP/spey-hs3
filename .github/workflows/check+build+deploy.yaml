@@ -42,11 +42,14 @@ jobs:
             - name: Checkout git repository
               uses: actions/checkout@v4
 
-            - name: Build Spey wheel
+            - name: Build Spey-HS3 wheel
               run: |
                   python -m pip install --upgrade pip
                   python -m pip install wheel
-                  python setup.py bdist_wheel
+                  python -m build --wheel
+
+            - name: Debug
+              run: ls -l dist
 
             - name: Upload wheels as artifacts
               uses: actions/upload-artifact@v4
