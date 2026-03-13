@@ -11,6 +11,7 @@ import pyhs3
 from pyhs3.domains import ProductDomain
 from spey.base import ModelConfig
 from spey.base.backend_base import BackendBase
+from spey.system.exceptions import PluginError
 from spey.utils import ExpectationType
 
 from ._version import __version__
@@ -195,7 +196,13 @@ class HS3Interface(BackendBase):
         # pyhs3 >=0.4.1 requires SampleData.errors in every sample; fill in
         # zeros for any sample that omits the field (modifies working_dict in-place).
         _ensure_sample_errors(working_dict)
-        self._workspace: pyhs3.Workspace = pyhs3.Workspace(**working_dict)
+        try:
+            self._workspace: pyhs3.Workspace = pyhs3.Workspace(**working_dict)
+        except pyhs3.exceptions.ValidationError as e:
+            raise PluginError(
+                "HS3 Dictionary is not compatible with pyhs3 backend. "
+                "See pyhs3 documentation for details: https://pyhs3.readthedocs.io"
+            ) from e
 
         # ------------------------------------------------------------------ #
         # 4. Resolve analysis / likelihood                                    #
@@ -281,7 +288,9 @@ class HS3Interface(BackendBase):
 
             # Look up observed data via the workspace data store (data_name is a str)
             if isinstance(data_name, str):
-                data_obj = self._workspace.data.get(data_name)
+                data_obj = self._workspace.data.get(  # pylint: disable = no-member
+                    data_name
+                )
                 if data_obj is not None and hasattr(data_obj, "contents"):
                     observed_data[dist_name] = np.array(
                         data_obj.contents, dtype=np.float64
