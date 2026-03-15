@@ -8,6 +8,7 @@
 
 [![github](https://img.shields.io/static/v1?style=plastic&label&message=GitHub&logo=github&logoColor=black&color=white)](https://github.com/SpeysideHEP/spey-hs3)
 [![PyPI - Version](https://img.shields.io/pypi/v/spey-hs3?style=plastic)](https://pypi.org/project/spey-hs3/)
+![tests workflow](https://github.com/SpeysideHEP/spey-hs3/actions/workflows/tests.yml/badge.svg?branch=main&style=plastic)
 [![Documentation Status](https://readthedocs.org/projects/spey-hs3/badge/?version=main&style=plastic)](https://spey-hs3.readthedocs.io)
 [![GitHub License](https://img.shields.io/github/license/SpeysideHEP/spey-hs3?style=plastic)](https://github.com/SpeysideHEP/spey-hs3/blob/main/LICENSE)
 
