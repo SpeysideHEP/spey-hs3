@@ -2,15 +2,16 @@
 
 [![arxiv](https://img.shields.io/static/v1?style=plastic&label=arXiv&message=2307.06996&color=brightgreen)](https://arxiv.org/abs/2307.06996)
 [![DOI](https://img.shields.io/static/v1?style=plastic&label=DOI&message=10.21468/SciPostPhys.16.1.032&color=blue)](https://scipost.org/10.21468/SciPostPhys.16.1.032)
-[![doc](https://img.shields.io/static/v1?style=plastic&label&message=Documentation&logo=gitbook&logoColor=white&color=gray)](http://spey-hs3.readthedocs.io/)
+<!-- [![doc](https://img.shields.io/static/v1?style=plastic&label&message=Documentation&logo=gitbook&logoColor=white&color=gray)](http://spey-hs3.readthedocs.io/) -->
 
 <img src="https://raw.githubusercontent.com/SpeysideHEP/spey/main/docs/img/spey-plug-in.png" alt="Spey logo" style="float: right; margin-right: 20px" align="right" width=250px/>
 
 [![github](https://img.shields.io/static/v1?style=plastic&label&message=GitHub&logo=github&logoColor=black&color=white)](https://github.com/SpeysideHEP/spey-hs3)
 [![PyPI - Version](https://img.shields.io/pypi/v/spey-hs3?style=plastic)](https://pypi.org/project/spey-hs3/)
 ![tests workflow](https://github.com/SpeysideHEP/spey-hs3/actions/workflows/tests.yml/badge.svg?branch=main&style=plastic)
-[![Documentation Status](https://readthedocs.org/projects/spey-hs3/badge/?version=main&style=plastic)](https://spey-hs3.readthedocs.io)
 [![GitHub License](https://img.shields.io/github/license/SpeysideHEP/spey-hs3?style=plastic)](https://github.com/SpeysideHEP/spey-hs3/blob/main/LICENSE)
+[![codecov](https://codecov.io/gh/SpeysideHEP/spey-hs3/graph/badge.svg?token=E0GNMJN11V)](https://codecov.io/gh/SpeysideHEP/spey-hs3)
+<!-- [![Documentation Status](https://readthedocs.org/projects/spey-hs3/badge/?version=main&style=plastic)](https://spey-hs3.readthedocs.io) -->
 
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/spey-hs3?style=plastic)
 

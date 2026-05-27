@@ -1,0 +1,39 @@
+{
+    "description": "HS3 Statistical Models in Spey",
+    "license": "MIT",
+    "title": "SpeysideHEP/spey-hs3: v0.0.1",
+    "version": "v0.0.1",
+    "upload_type": "software",
+    "creators": [
+        {
+            "affiliation": "University College London & City St George's, University of London",
+            "name": "Araz, Jack Y.",
+            "orcid": "0000-0001-8721-8042"
+        }
+    ],
+    "access_right": "open",
+    "keywords": [
+        "physics",
+        "statistics",
+        "hs3",
+        "inference"
+    ],
+    "related_identifiers": [
+        {
+            "scheme": "doi",
+            "identifier": "10.21468/SciPostPhys.16.1.032",
+            "relation": "isDocumentedBy",
+            "resource_type": "publication-article"
+        },
+        {
+            "scheme": "url",
+            "identifier": "https://github.com/SpeysideHEP/spey-hs3/tree/v0.0.1",
+            "relation": "isSupplementTo"
+        },
+        {
+            "scheme": "url",
+            "identifier": "https://spey.readthedocs.io/",
+            "relation": "isDocumentedBy"
+        }
+    ]
+}
