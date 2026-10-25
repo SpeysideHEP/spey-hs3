@@ -9,6 +9,7 @@
 
 [![github](https://img.shields.io/static/v1?style=plastic&label&message=GitHub&logo=github&logoColor=black&color=white)](https://github.com/SpeysideHEP/spey-hs3)
 [![PyPI - Version](https://img.shields.io/pypi/v/spey-hs3?style=plastic)](https://pypi.org/project/spey-hs3/)
+[![Conda Version](https://img.shields.io/conda/vn/conda-forge/spey-hs3.svg)](https://anaconda.org/conda-forge/spey-hs3)
 ![tests workflow](https://github.com/SpeysideHEP/spey-hs3/actions/workflows/tests.yml/badge.svg?branch=main&style=plastic)
 [![GitHub License](https://img.shields.io/github/license/SpeysideHEP/spey-hs3?style=plastic)](https://github.com/SpeysideHEP/spey-hs3/blob/main/LICENSE)
 [![codecov](https://codecov.io/gh/SpeysideHEP/spey-hs3/graph/badge.svg?token=E0GNMJN11V)](https://codecov.io/gh/SpeysideHEP/spey-hs3)
@@ -38,6 +39,14 @@ pip install spey spey-hs3
 
 The plug-in registers itself automatically as the `hs3` backend and is
 immediately available via `spey.get_backend("hs3")`.
+
+Installing `spey-hs3` from the `conda-forge` channel can be achieved by adding `conda-forge` to your channels with:
+
+```bash
+conda config --add channels conda-forge
+conda config --set channel_priority strict
+conda install spey-hs3
+```
 
 ---
 
